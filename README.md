@@ -11,6 +11,8 @@ Usage: After enter Pwned DFU Mode, ```./ipwndfu --patch```
 
 ## Thanks
 
+This fork is combining all signature patches into one.
+
 * A11 Patch: @tihmstar(https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks_t8015.py)
 
 * A10X and A7 Patch: Linus Henze(https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks.py)
