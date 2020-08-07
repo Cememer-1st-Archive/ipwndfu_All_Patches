@@ -7,6 +7,12 @@ import dfu, nor, utilities
 import alloc8, checkm8, image3_24Kpwn, limera1n, SHAtter, steaks4uce, usbexec
 from dfuexec import *
 
+# For signature patch 
+HOST2DEVICE = 0x21
+DEVICE2HOST = 0xA1
+DFU_DNLOAD = 1
+DFU_ABORT = 4
+
 def print_help():
     print 'USAGE: ipwndfu [options]'
     print 'Interact with an iOS device in DFU Mode.\n'
@@ -29,10 +35,11 @@ def print_help():
     print '  --encrypt-gid=hexdata\t\tAES encrypt with GID key'
     print '  --decrypt-uid=hexdata\t\tAES decrypt with UID key'
     print '  --encrypt-uid=hexdata\t\tAES encrypt with UID key'
+    print '  --patch\t\t\tPatch img4 signature check'
 
 if __name__ == '__main__':
     try:
-        advanced = ['demote', 'boot', 'dump=', 'hexdump=', 'dump-rom', 'dump-nor=', 'flash-nor=', '24kpwn', 'remove-24kpwn', 'remove-alloc8', 'decrypt-gid=', 'encrypt-gid=', 'decrypt-uid=', 'encrypt-uid=']
+        advanced = ['demote', 'boot', 'dump=', 'hexdump=', 'dump-rom', 'dump-nor=', 'flash-nor=', '24kpwn', 'remove-24kpwn', 'remove-alloc8', 'decrypt-gid=', 'encrypt-gid=', 'decrypt-uid=', 'encrypt-uid=', 'patch']
         opts, args = getopt.getopt(sys.argv[1:], 'pxf:', advanced)
     except getopt.GetoptError:
         print 'ERROR: Invalid arguments provided.'
@@ -413,3 +420,145 @@ if __name__ == '__main__':
                 device.write_memory(DFU_BOOL, '\x01')
                 device.execute(0, DFU_NOTIFY, DFU_STATE)
                 print 'Booted.'
+
+        # Patch sign check tool by Cememer
+        if opt == '--patch':
+            print '*** Patch sign check tool by Cememer ***'
+            device = dfu.acquire_device()
+            serial_number = device.serial_number
+            if 'PWND:[checkm8]' not in serial_number:
+                print 'ERROR:Device is not Pwned DFU Mode. Please enable pwned DFU Mode first. Exit...'
+                sys.exit(1)
+            
+            if 'CPID:8015' in serial_number:
+                print 'Found T8015 Device. Patching...'
+
+                # https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks_t8015.py
+                print "*** SecureROM t8015 sigcheckpath by tihmstar ***"
+                dfu.release_device(device)
+
+                device = usbexec.PwnedUSBDevice()
+
+                device.write_memory(0x000000018000c400,binascii.unhexlify("2506000001000000")) #clear write bit
+                device.execute(0,0x1000004F0) #memory barrier
+                device.execute(0,0x1000004AC) #flush tlb
+
+                #patch codesigs
+                device.write_memory(0x000000010000624c,"\x00\x00\x80\xD2") #patch sigcheck
+
+                device.write_memory(0x000000010000db98,"\xC0\x03\x5F\xD6") #disable heap corruption check
+
+                device.execute(0,0x1000004F0) #memory barrier
+
+                print("done remapping and patching page")
+                device = dfu.acquire_device()
+
+                device.ctrl_transfer(HOST2DEVICE, DFU_ABORT, 0, 0, 0, 0)
+                # Perform USB reset
+                try:
+                    dfu.usb_reset(device)
+                    dfu.release_device(device)
+                except:
+                    pass
+                print "Device is now ready to accept unsigned images"
+            elif 'CPID:8011' in serial_number:
+                print 'Found T8011 Device. Patching...'
+
+                # https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks.py
+                print "*** SecureROM Signature check remover by Linus Henze ***"
+                t8011_patches = {
+                    0x100006df8: "\x21\x00\x80\x52\xe1\xb7\x03\x39\xe1\xb3\x03\x39\xe1\xbb\x03\x39",
+                    0x100006e0c: "\x1f\x20\x03\xd5", # nop
+                    0x100006e10: "\x1f\x20\x03\xd5", # nop
+                    0x100006e14: "\x1f\x20\x03\xd5", # nop
+                    0x10000f2d0: "\x00\x00\x80\xd2\xc0\x03\x5f\xd6"
+                }
+                print "Applying patches..."
+                try:
+                    pdev = usbexec.PwnedUSBDevice()
+                except usb.core.USBError:
+                    print "Patches have already been applied. Exiting."
+                    sys.exit(0)
+                for k in t8011_patches.keys():
+                    pdev.write_memory(k, t8011_patches[k])
+                print "Successfully applied patches"
+                print "Resetting device state"
+                print "* This will effectiveley disable pwned DFU Mode"
+                print "* Only the signature patches will remain"
+                # Send abort
+                device.ctrl_transfer(HOST2DEVICE, DFU_ABORT, 0, 0, 0, 0)
+                # Perform USB reset
+                dfu.usb_reset(device)
+                dfu.release_device(device)
+                print "Device is now ready to accept unsigned images"
+            elif 'CPID:8010' in serial_number:
+                print 'Found T8010 device. Patching...'
+
+                # https://github.com/Cryptiiiic/ipwndfu_public/blob/master/rmsigchks.py
+                print "*** SecureROM Signature check remover by Linus Henze ***"
+                print "**** T8010 patch made by Cryptiiiic"
+                t8010_patches = {
+                    0x100006C80: "\x21\x00\x80\x52\xe1\xe3\x03\x39\xe1\xef\x03\x39\xe1\xf7\x03\x39\xe1\xeb\x03\x39\xe1\xf3\x03\x39\xe1\xfb\x03\x39",
+                    0x100006ca0: "\x1f\x20\x03\xd5", # nop
+                    0x100006ca4: "\x1f\x20\x03\xd5", # nop
+                    0x100006ca8: "\x1f\x20\x03\xd5", # nop
+                    0x10000f1b0: "\x00\x00\x80\xd2\xc0\x03\x5f\xd6"
+                }
+                print "Applying patches..."
+                try:
+                    pdev = usbexec.PwnedUSBDevice()
+                except usb.core.USBError:
+                    print "Patches have already been applied. Exiting."
+                    sys.exit(0)
+                for k in t8011_patches.keys():
+                    pdev.write_memory(k, t8011_patches[k])
+                print "Successfully applied patches"
+                print "Resetting device state"
+                print "* This will effectiveley disable pwned DFU Mode"
+                print "* Only the signature patches will remain"
+                # Send abort
+                device.ctrl_transfer(HOST2DEVICE, DFU_ABORT, 0, 0, 0, 0)
+                # Perform USB reset
+                dfu.usb_reset(device)
+                dfu.release_device(device)
+                print "Device is now ready to accept unsigned images"
+            elif 'CPID:8960' in serial_number:
+                print 'Found s5l8960x device. Patching....'
+
+                # https://github.com/LinusHenze/ipwndfu_public
+
+                s5l8960x_patches = {
+                   0x1000054e4: "\x1f\x20\x03\xd5",
+                        0x1000054b4: b"".join([
+                        b"\x21\x00\x80\x52", # mov w1, 1
+                        b"\xe1\x9f\x02\x39", # strb w1, [sp,#0xA7]
+                        b"\x1f\x20\x03\xd5", # nop
+                        b"\xe1\xa7\x02\x39", # strb w1, [sp,#0xA9]
+                        b"\xe1\xab\x02\x39", # strb w1, [sp,#0xAA]
+                        b"\x1f\x20\x03\xd5", # nop
+                        b"\x1f\x20\x03\xd5", # nop
+                        b"\x1f\x20\x03\xd5", # nop
+                       b"\x1f\x20\x03\xd5", # nop
+                    ])
+                }
+                print "Applying patches..."
+                try:
+                    pdev = usbexec.PwnedUSBDevice()
+                except usb.core.USBError:
+                    print "Patches have already been applied. Exiting."
+                    sys.exit(0)
+                for k in t8011_patches.keys():
+                    pdev.write_memory(k, t8011_patches[k])
+                print "Successfully applied patches"
+                print "Resetting device state"
+                print "* This will effectiveley disable pwned DFU Mode"
+                print "* Only the signature patches will remain"
+                # Send abort
+                device.ctrl_transfer(HOST2DEVICE, DFU_ABORT, 0, 0, 0, 0)
+                # Perform USB reset
+                dfu.usb_reset(device)
+                dfu.release_device(device)
+                print "Device is now ready to accept unsigned images"
+            else:
+                print 'ERROR: This device is not supoort. Exit...'
+                sys.exit(1)           
