@@ -1,4 +1,23 @@
 ![](repo/ipwndfu.png)
+
+# About this fork
+This fork can patch img4 signature check.
+
+Support SoC:T8015(A11), T8011(A10X), T8010(A10), s5l8960x(A7)
+
+**Note:A8 and A9 SoC aren't support.** In the first place, ipwndfu isn't support those SoC.
+
+Usage: After enter Pwned DFU Mode, ```./ipwndfu --patch```
+
+## Thanks
+
+* A11 Patch: @tihmstar(https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks_t8015.py)
+
+* A10X and A7 Patch: Linus Henze(https://github.com/LinusHenze/ipwndfu_public/blob/master/rmsigchks.py)
+
+* A10 Patch: Cryptiiiic(https://github.com/Cryptiiiic/ipwndfu_public/blob/master/rmsigchks.py)
+
+
 # Open-source jailbreaking tool for many iOS devices
 
 
